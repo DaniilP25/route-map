@@ -24,12 +24,18 @@ export default function Map() {
             return;
         }
 
-        const map = L.map(mapContainerRef.current).setView(
+        const map = L.map(mapContainerRef.current, {
+            zoomControl: false,
+        }).setView(
             [55.7558, 37.6176],
             10,
         );
 
         mapRef.current = map;
+
+        L.control.zoom({
+            position: "bottomright"
+        }).addTo(map);
 
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
             attribution:
