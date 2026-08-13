@@ -12,12 +12,10 @@ export default function Map() {
         "departure" | "arrival" | null
     >(null);
 
-    const [points, setPoints] = useState<[number, number][]>([]);
-    const [route, setRoute] = useState<[number, number][]>([]);
-
     const mapContainerRef = useRef<HTMLDivElement | null>(null);
-
     const mapRef = useRef<L.Map | null>(null);
+
+    const routeLineRef = useRef<L.Polyline | null>(null);
 
     useEffect(() => {
         if (!mapContainerRef.current) {
@@ -42,19 +40,6 @@ export default function Map() {
                 '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         }).addTo(map);
 
-        map.on("click", (event) => {
-            const lat = event.latlng.lat;
-            const lng = ((event.latlng.lng + 180) % 360 + 360) % 360 - 180;
-            console.log(lat, lng);
-
-            setPoints((current) => {
-                if (current.length >= 2) {
-                    return current;
-                } 
-                return [...current, [lat, lng]]
-            });
-        });
-
         return () => {
             map.remove();
             mapRef.current = null;
@@ -62,49 +47,98 @@ export default function Map() {
     }, []);
 
     useEffect(() => {
-       async function getRoute() {
-            const response = await fetch(
-                "http://127.0.0.1:3001/route", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        points: points,
-                    }),
-                },
-            );
-
-            if (!response.ok) {
-                throw new Error(
-                    `HTTP error: ${response.status}`
-                )
-            }
-
-            const data = await response.json();
-            console.log(data);
-
-            const coordinates = data.geometry.coordinates.map(
-                ([lng, lat]: [number, number]) => [lat, lng] as [number, number]
-            );
-
-            setRoute(coordinates);
-        }
-
-        getRoute();
-    }, [points]);
-
-    useEffect(() => {
-        if (!mapRef.current || route.length === 0) {
+        if (!mapRef.current) {
             return;
         }
 
-        const line = L.polyline(route).addTo(mapRef.current);
+        const map = mapRef.current;
+
+        const handleMapClick = (event: L.LeafletMouseEvent) => {
+            if (selecting === null) {
+                return;
+            }
+
+            const lat = event.latlng.lat;
+            const lng = ((event.latlng.lng + 180) % 360 + 360) % 360 - 180;
+        
+            const point: Point = [lat, lng];
+
+            if (selecting === "departure") {
+                setDeparture(point);
+            }
+            else if (selecting === "arrival") {
+                setArrival(point);
+            }
+
+            setSelecting(null);
+        };
+
+        map.on("click", handleMapClick);
 
         return () => {
-            line.remove();
+            map.off("click", handleMapClick);
         };
-    }, [route]);
+
+    }, [selecting]);
+
+    useEffect(() => {
+        if (!departure || !arrival) {
+            return;
+        }
+
+        async function getRoute() {
+            try {
+                const response = await fetch(
+                    "http://127.0.0.1:3001/route", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            points: [
+                                departure,
+                                arrival,
+                            ],
+                        }),
+                    },
+                );
+                
+
+                if (!response.ok) {
+                    throw new Error(
+                        `HTTP error: ${response.status}`
+                    )
+                }
+
+                const data = await response.json();
+                console.log(data);
+
+                const coordinates: Point[] = data.geometry.coordinates.map(
+                    ([lng, lat]: [number, number]) => [lat, lng] as Point
+                );
+
+                if (routeLineRef.current) {
+                    routeLineRef.current.remove();
+                    routeLineRef.current = null;
+                }
+
+                if (mapRef.current) {
+                    routeLineRef.current = L.polyline(
+                        coordinates,
+                    ).addTo(mapRef.current);
+                }
+            } catch (error) {
+                console.error("Route error:", error);
+                
+                if (routeLineRef.current) {
+                    routeLineRef.current.remove();
+                    routeLineRef.current = null;
+                }
+            }
+        }
+
+        getRoute();
+    }, [departure, arrival]);
 
     return (
         <>
