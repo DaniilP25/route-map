@@ -9,13 +9,19 @@ export default function Map() {
     const [departure, setDeparture] = useState<Point | null>(null);
     const [arrival, setArrival] = useState<Point | null>(null);
     const [selecting, setSelecting] = useState<
-        "departure" | "arrival" | null
+        "departure" | "arrival" | "build-route" | null
     >(null);
+    const [route, setRoute] = useState<{
+        type: string;
+        coordinates: [number, number][];
+    } | null>(null);
 
     const mapContainerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<L.Map | null>(null);
 
     const routeLineRef = useRef<L.Polyline | null>(null);
+    const departureMarkerRef = useRef<L.Marker | null>(null);
+    const arrivalMarkerRef = useRef<L.Marker | null>(null);
 
     useEffect(() => {
         if (!mapContainerRef.current) {
@@ -82,12 +88,12 @@ export default function Map() {
     }, [selecting]);
 
     useEffect(() => {
-        if (!departure || !arrival) {
-            return;
-        }
-
         async function getRoute() {
             try {
+                if (!departure || !arrival) {
+                    return;
+                }
+
                 const response = await fetch(
                     "http://127.0.0.1:3001/route", {
                         method: "POST",
@@ -96,8 +102,8 @@ export default function Map() {
                         },
                         body: JSON.stringify({
                             points: [
-                                departure,
-                                arrival,
+                                `${departure[0]}, ${departure[1]}`,
+                                `${arrival[0]}, ${arrival[1]}`,
                             ],
                         }),
                     },
@@ -140,6 +146,87 @@ export default function Map() {
         getRoute();
     }, [departure, arrival]);
 
+    useEffect(() => {
+        if (!mapRef.current || !route) {
+            return;
+        }
+
+        if (routeLineRef.current) {
+            routeLineRef.current.remove();
+        }
+
+        const coordinates: Point[] = route.coordinates.map(
+            ([lng, lat]) => [lat, lng]
+        );
+
+        routeLineRef.current = L.polyline(
+            coordinates
+        ).addTo(mapRef.current);
+    }, [route]);
+
+    useEffect(() => {
+        if (!mapRef.current) {
+            return;
+        }
+
+        const map = mapRef.current;
+
+        if (departure) {
+            if (!departureMarkerRef.current) {
+                departureMarkerRef.current = L.marker(departure, {
+                    draggable: true,
+                }).addTo(map);
+
+                departureMarkerRef.current.on("dragend", () => {
+                    const marker = departureMarkerRef.current;
+
+                    if (!marker) {
+                        return;
+                    }
+
+                    const position = marker.getLatLng();
+
+                    setDeparture([position.lat, position.lng]);
+                });
+            }
+            else {
+                departureMarkerRef.current.setLatLng(departure);   
+            }
+        }
+        else if (departureMarkerRef.current) {
+            departureMarkerRef.current.remove();
+            departureMarkerRef.current = null;
+        }
+
+        if (arrival) {
+            if (!arrivalMarkerRef.current) {
+                arrivalMarkerRef.current = L.marker(arrival, {
+                    draggable: true,
+                }).addTo(map);
+
+                arrivalMarkerRef.current.on("dragend", () => {
+                    const marker = arrivalMarkerRef.current;
+
+                    if (!marker) {
+                        return;
+                    }
+
+                    const position = marker.getLatLng();
+
+                    setArrival([position.lat, position.lng]);
+                });
+            }
+            else {
+                arrivalMarkerRef.current.setLatLng(arrival);
+            }
+        }
+        else if (arrivalMarkerRef.current) {
+            arrivalMarkerRef.current.remove();
+            arrivalMarkerRef.current = null;
+        }
+
+    }, [departure, arrival]);
+
     return (
         <>
         <div
@@ -154,6 +241,7 @@ export default function Map() {
             onSelectMode={setSelecting}
             onDepartureChange={setDeparture}
             onArrivalChange={setArrival}
+            onRouteChange={setRoute}
         />
         </>);
 }
