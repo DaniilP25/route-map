@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Map } from "lucide-react";
+import { Map, Plus } from "lucide-react";
 type Point = [number, number];
 
 interface RoutePanelProps {
@@ -101,50 +101,60 @@ export default function RoutePanel({
                 </button>
             </div>
 
-            <button
-                type="button"
-                onClick={async () => {
-                    onSelectMode("build-route");
-                    try {
-                        const response = await fetch(
-                            "http://127.0.0.1:3001/route", {
-                                method: "POST",
-                                headers: {
-                                    "Content-Type": "application/json",
+            <div className="mt-4 flex items-center justify-end gap-3">
+                <button
+                    type="button"
+                    onClick={async () => {
+                        onSelectMode("build-route");
+                        try {
+                            const response = await fetch(
+                                "http://127.0.0.1:3001/route", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                        points: [
+                                            departure
+                                                ? `${departureText[0]}, ${departureText[1]}`
+                                                : departureText,
+                                            arrival
+                                                ? `${arrivalText[0]}, ${arrivalText[1]}`
+                                                : arrivalText,
+                                        ],
+                                    }),
                                 },
-                                body: JSON.stringify({
-                                    points: [
-                                        departure
-                                            ? `${departureText[0]}, ${departureText[1]}`
-                                            : departureText,
-                                        arrival
-                                            ? `${arrivalText[0]}, ${arrivalText[1]}`
-                                            : arrivalText,
-                                    ],
-                                }),
-                            },
-                        );
+                            );
 
-                        if (!response.ok) {
-                            throw new Error(`HTTP error: ${response.status}`);
+                            if (!response.ok) {
+                                throw new Error(`HTTP error: ${response.status}`);
+                            }
+
+                            const data = await response.json();
+                            onRouteChange(data.geometry);
                         }
+                        catch (error) {
+                            console.error("Route error:", error);
+                        }
+                    }}
+                    className={`flex h-10 w-48 shrink-0 items-center justify-center rounded border ${
+                        selecting === "build-route"
+                        ? "bg-black text-white"
+                        : "bg-white text-black hover:bg-black hover:text-white"
+                    }`}
+                    title="Построить маршрут"
+                >
+                    Построить маршрут
+                </button>
 
-                        const data = await response.json();
-                        onRouteChange(data.geometry);
-                    }
-                    catch (error) {
-                        console.error("Route error:", error);
-                    }
-                }}
-                className={`flex h-10 w-40 shrink-0 items-center justify-center rounded border ${
-                    selecting === "build-route"
-                    ? "bg-black text-white"
-                    : "bg-white text-black hover:bg-black hover:text-white"
-                }`}
-                title="Построить маршрут"
-            >
-                Построить маршрут
-            </button>
+                <button
+                    type="button"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded border bg-white text-black hover:bg-black hover:text-white"
+                    title="Добавить новую точку"
+                >
+                    <Plus strokeWidth={2} size={20} />
+                </button>
+            </div>
         </div>
     )
 }
