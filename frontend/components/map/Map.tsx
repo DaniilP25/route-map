@@ -5,6 +5,25 @@ import L from "leaflet";
 import RoutePanel from "./RoutePanel";
 type Point = [number, number];
 
+interface RoutePoint {
+    text: string;
+    point: Point | null;
+}
+
+interface ArrivalInput extends RoutePoint {
+    id: number;
+}
+
+type Selecting = 
+    { type: "departure" } |
+    { type: "arrival"; id: number } |
+    null;
+
+interface RouteGeometry {
+    type: string;
+    coordinates: [number, number][];
+}
+
 function createPointIcon(number: number) {
     return L.divIcon({
         className: "",
@@ -22,23 +41,34 @@ function createPointIcon(number: number) {
 }
 
 export default function Map() {
-    const [departure, setDeparture] = useState<Point | null>(null);
-    const [arrival, setArrival] = useState<Point | null>(null);
-    const [selecting, setSelecting] = useState<
-        "departure" | "arrival" | "build-route" | null
-    >(null);
-    const [route, setRoute] = useState<{
-        type: string;
-        coordinates: [number, number][];
-    } | null>(null);
+    const [departure, setDeparture] = useState<RoutePoint>({
+        text: "",
+        point: null,
+    });
+
+    const [arrivals, setArrivals] = useState<ArrivalInput[]>([
+        {
+            id: 1,
+            text: "",
+            point: null,
+        },
+    ]);
+
+    const [selecting, setSelecting] = useState<Selecting>(null);
+    const [route, setRoute] = useState<RouteGeometry | null>(null);
+
+    const buildRoute = () => {
+
+    };
 
     const mapContainerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<L.Map | null>(null);
 
     const routeLineRef = useRef<L.Polyline | null>(null);
     const departureMarkerRef = useRef<L.Marker | null>(null);
-    const arrivalMarkerRef = useRef<L.Marker | null>(null);
+    const arrivalMarkerRefs = useRef<Map<number, L.Marker>>(new globalThis.Map());
 
+    // Инициализация карты
     useEffect(() => {
         if (!mapContainerRef.current) {
             return;
@@ -47,8 +77,8 @@ export default function Map() {
         const map = L.map(mapContainerRef.current, {
             zoomControl: false,
         }).setView(
-            [55.7558, 37.6176],
-            10,
+            [54.99, 73.36],
+            13,
         );
 
         mapRef.current = map;
@@ -68,6 +98,7 @@ export default function Map() {
         };
     }, []);
 
+    // Выбор точки кликом на карте
     useEffect(() => {
         if (!mapRef.current) {
             return;
@@ -76,7 +107,7 @@ export default function Map() {
         const map = mapRef.current;
 
         const handleMapClick = (event: L.LeafletMouseEvent) => {
-            if (selecting === null) {
+            if (selecting == null) {
                 return;
             }
 
@@ -85,11 +116,24 @@ export default function Map() {
         
             const point: Point = [lat, lng];
 
-            if (selecting === "departure") {
-                setDeparture(point);
+            if (selecting.type === "departure") {
+                setDeparture({
+                    text: `${point[0]}, ${point[1]}`,
+                    point,
+                });
             }
-            else if (selecting === "arrival") {
-                setArrival(point);
+            else if (selecting.type === "arrival") {
+                setArrivals((current) =>
+                    current.map((arrival) =>
+                        arrival.id === selecting.id
+                        ? {
+                            ...arrival,
+                            point,
+                            text: `${point[0]}, ${point[1]}`
+                        }
+                        : arrival
+                    )
+                );
             }
 
             setSelecting(null);
@@ -103,10 +147,35 @@ export default function Map() {
 
     }, [selecting]);
 
+    // API-запрос: отправка точек (координат/мест) -> получение координат точек маршрута, времени и расстояния
     useEffect(() => {
         async function getRoute() {
             try {
-                if (!departure || !arrival) {
+                if (arrivals.length === 0) {
+                    return;
+                }
+
+                const points: string[] = [
+                    departure.point
+                        ? `${departure.point[0]}, ${departure.point[1]}`
+                        : departure.text,
+                    
+                    ...arrivals
+                        .map((arrival) =>
+                            arrival.point
+                            ? `${arrival.point[0]}, ${arrival.point[1]}`
+                            : arrival.text
+                        )
+                        .filter((point) => point.trim() !== ""),
+                ];
+
+                if (!departure.point && departure.text.trim() === "") {
+                    setRoute(null);
+                    return;
+                }
+
+                if (points.length < 2) {
+                    setRoute(null);
                     return;
                 }
 
@@ -117,10 +186,7 @@ export default function Map() {
                             "Content-Type": "application/json",
                         },
                         body: JSON.stringify({
-                            points: [
-                                `${departure[0]}, ${departure[1]}`,
-                                `${arrival[0]}, ${arrival[1]}`,
-                            ],
+                            points: points,
                         }),
                     },
                 );
@@ -133,24 +199,11 @@ export default function Map() {
                 }
 
                 const data = await response.json();
-                console.log(data);
 
-                const coordinates: Point[] = data.geometry.coordinates.map(
-                    ([lng, lat]: [number, number]) => [lat, lng] as Point
-                );
-
-                if (routeLineRef.current) {
-                    routeLineRef.current.remove();
-                    routeLineRef.current = null;
-                }
-
-                if (mapRef.current) {
-                    routeLineRef.current = L.polyline(
-                        coordinates,
-                    ).addTo(mapRef.current);
-                }
+                setRoute(data.geometry);
             } catch (error) {
                 console.error("Route error:", error);
+                setRoute(null);
                 
                 if (routeLineRef.current) {
                     routeLineRef.current.remove();
@@ -160,15 +213,21 @@ export default function Map() {
         }
 
         getRoute();
-    }, [departure, arrival]);
+    }, [departure, arrivals]);
 
+    // Отрисовка маршрута по координатам точек
     useEffect(() => {
-        if (!mapRef.current || !route) {
+        if (!mapRef.current) {
             return;
         }
 
         if (routeLineRef.current) {
             routeLineRef.current.remove();
+            routeLineRef.current = null;
+        }
+
+        if (!route) {
+            return;
         }
 
         const coordinates: Point[] = route.coordinates.map(
@@ -187,27 +246,28 @@ export default function Map() {
 
         const map = mapRef.current;
 
-        if (departure) {
+        if (departure.point) {
             if (!departureMarkerRef.current) {
-                departureMarkerRef.current = L.marker(departure, {
+                const marker = L.marker(departure.point, {
                     draggable: true,
                     icon: createPointIcon(1),
                 }).addTo(map);
 
-                departureMarkerRef.current.on("dragend", () => {
-                    const marker = departureMarkerRef.current;
-
-                    if (!marker) {
-                        return;
-                    }
-
+                marker.on("dragend", () => {
                     const position = marker.getLatLng();
 
-                    setDeparture([position.lat, position.lng]);
+                    setDeparture({
+                        text: `${position.lat}, ${position.lng}`,
+                        point: [
+                            position.lat,
+                            position.lng,
+                        ],
+                    });
                 });
+                departureMarkerRef.current = marker;
             }
             else {
-                departureMarkerRef.current.setLatLng(departure);   
+                departureMarkerRef.current.setLatLng(departure.point);   
             }
         }
         else if (departureMarkerRef.current) {
@@ -215,35 +275,63 @@ export default function Map() {
             departureMarkerRef.current = null;
         }
 
-        if (arrival) {
-            if (!arrivalMarkerRef.current) {
-                arrivalMarkerRef.current = L.marker(arrival, {
-                    draggable: true,
-                    icon: createPointIcon(2),
-                }).addTo(map);
+        const activeIds = new Set(
+            arrivals
+                .filter((arrival) => arrival.point)
+                .map((arrival) => arrival.id)
+        );
 
-                arrivalMarkerRef.current.on("dragend", () => {
-                    const marker = arrivalMarkerRef.current;
-
-                    if (!marker) {
-                        return;
-                    }
-
-                    const position = marker.getLatLng();
-
-                    setArrival([position.lat, position.lng]);
-                });
-            }
-            else {
-                arrivalMarkerRef.current.setLatLng(arrival);
+        for (const [id, marker] of arrivalMarkerRefs.current) {
+            if (!activeIds.has(id)) {
+                marker.remove();
+                arrivalMarkerRefs.current.delete(id);
             }
         }
-        else if (arrivalMarkerRef.current) {
-            arrivalMarkerRef.current.remove();
-            arrivalMarkerRef.current = null;
-        }
 
-    }, [departure, arrival]);
+        arrivals.forEach((arrival) => {
+            if (!arrival.point) {
+                return;
+            }
+
+            const existingMarker = arrivalMarkerRefs.current.get(
+                arrival.id
+            );
+
+            if (existingMarker) {
+                existingMarker.setLatLng(arrival.point);
+                return;
+            }
+
+            const marker = L.marker(arrival.point, {
+                draggable: true,
+                icon: createPointIcon(arrival.id + 1),
+            }).addTo(map);
+
+            marker.on("dragend", () => {
+                const position = marker.getLatLng();
+
+                setArrivals((current) =>
+                    current.map((item) =>
+                        item.id === arrival.id
+                            ? {
+                                ...item,
+                                point: [
+                                    position.lat,
+                                    position.lng,
+                                ],
+                                text: `${position.lat}, ${position.lng}`,
+                            }
+                            : item
+                    )
+                );
+            });
+
+            arrivalMarkerRefs.current.set(
+                arrival.id,
+                marker
+            );
+        });
+    }, [departure, arrivals]);
 
     return (
         <>
@@ -254,12 +342,12 @@ export default function Map() {
     
         <RoutePanel
             departure={departure}
-            arrival={arrival}
+            arrivals={arrivals}
             selecting={selecting}
             onSelectMode={setSelecting}
             onDepartureChange={setDeparture}
-            onArrivalChange={setArrival}
-            onRouteChange={setRoute}
+            onArrivalChange={setArrivals}
+            onBuildRoute={buildRoute}
         />
         </>);
 }
