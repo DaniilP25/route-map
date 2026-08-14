@@ -5,6 +5,22 @@ import L from "leaflet";
 import RoutePanel from "./RoutePanel";
 type Point = [number, number];
 
+function createPointIcon(number: number) {
+    return L.divIcon({
+        className: "",
+        html: `
+            <div class="relative flex flex-col items-center">
+                <div class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-700 text-sm font-semibold text-white shadow-md">
+                    ${number}
+                </div>
+                <div class="h-2 w-2 -mt-1 rotate-45 bg-gray-700></div>
+            </div>
+        `,
+        iconSize: [32, 40],
+        iconAnchor: [16, 36],
+    });
+}
+
 export default function Map() {
     const [departure, setDeparture] = useState<Point | null>(null);
     const [arrival, setArrival] = useState<Point | null>(null);
@@ -175,6 +191,7 @@ export default function Map() {
             if (!departureMarkerRef.current) {
                 departureMarkerRef.current = L.marker(departure, {
                     draggable: true,
+                    icon: createPointIcon(1),
                 }).addTo(map);
 
                 departureMarkerRef.current.on("dragend", () => {
@@ -202,6 +219,7 @@ export default function Map() {
             if (!arrivalMarkerRef.current) {
                 arrivalMarkerRef.current = L.marker(arrival, {
                     draggable: true,
+                    icon: createPointIcon(2),
                 }).addTo(map);
 
                 arrivalMarkerRef.current.on("dragend", () => {
