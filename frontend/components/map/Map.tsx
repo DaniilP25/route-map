@@ -151,7 +151,8 @@ export default function Map() {
     useEffect(() => {
         async function getRoute() {
             try {
-                if (arrivals.length === 0) {
+                if (!departure.point) {
+                    setRoute(null);
                     return;
                 }
 
@@ -226,18 +227,15 @@ export default function Map() {
             routeLineRef.current = null;
         }
 
-        if (!route) {
-            return;
-        }
-
-        const coordinates: Point[] = route.coordinates.map(
-            ([lng, lat]) => [lat, lng]
+        const points: Point[] = [
+            departure.point,
+            ...arrivals.map((arrival) => arrival.point),
+        ].filter(
+            (point): point is Point => point != null
         );
 
-        routeLineRef.current = L.polyline(
-            coordinates
-        ).addTo(mapRef.current);
-    }, [route]);
+        routeLineRef.current = L.polyline(points).addTo(mapRef.current);
+    }, [departure, arrivals]);
 
     useEffect(() => {
         if (!mapRef.current) {
@@ -288,7 +286,7 @@ export default function Map() {
             }
         }
 
-        arrivals.forEach((arrival) => {
+        arrivals.forEach((arrival, index) => {
             if (!arrival.point) {
                 return;
             }
@@ -299,12 +297,13 @@ export default function Map() {
 
             if (existingMarker) {
                 existingMarker.setLatLng(arrival.point);
+                existingMarker.setIcon(createPointIcon(index + 2));
                 return;
             }
 
             const marker = L.marker(arrival.point, {
                 draggable: true,
-                icon: createPointIcon(arrival.id + 1),
+                icon: createPointIcon(index + 2),
             }).addTo(map);
 
             marker.on("dragend", () => {

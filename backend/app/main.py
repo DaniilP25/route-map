@@ -74,7 +74,7 @@ async def route(request: RouteRequest):
         (lat_a, lon_a), (lat_b, lon_b) = coordinates
 
         url = (
-            f"https://router.project-osrm.org/route/v1/driving/"
+            "https://router.project-osrm.org/route/v1/driving/"
             f"{lon_a},{lat_a};{lon_b},{lat_b}"
         )
 

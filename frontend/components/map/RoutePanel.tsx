@@ -46,7 +46,7 @@ export default function RoutePanel({
 
             <div className="mb-4 flex items-center gap-3">
                 <label className="w-40 shrink-0 text-base font-medium text-black whitespace-nowrap">
-                    Пункт отправления
+                    Точка №1
                 </label>
 
                 <input
@@ -87,8 +87,8 @@ export default function RoutePanel({
                     className="mb-4 flex items-center gap-3"
                 >
                     <label className="w-40 shrink-0 text-base font-medium text-black whitespace-nowrap">
-                        Пункт прибытия
-                        { arrivals.length > 1 && ` №${index + 1}` }
+                        Точка
+                        { ` №${index + 2}` }
                     </label>
 
                     <input
