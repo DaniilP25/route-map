@@ -1,10 +1,11 @@
 "use client";
 
-import { Map as MapIcon, Plus, X } from "lucide-react";
+import { Map as MapIcon, Plus, RotateCcw, X } from "lucide-react";
 import {
     type RoutePointInput,
     type GeocodingResult,
     type Selecting,
+    type RouteViewKey,
 } from "./types";
 
 interface RoutePanelProps {
@@ -17,6 +18,9 @@ interface RoutePanelProps {
     onBuildRoute: () => void;
     onAddPoint: () => void;
     onRemovePoint: (id: number) => void;
+    activeView: RouteViewKey;
+    activeViewLabel: string | null;
+    onResetOrder: () => void;
 }
 
 export default function RoutePanel({
@@ -31,12 +35,37 @@ export default function RoutePanel({
     onBuildRoute,
     onAddPoint,
     onRemovePoint,
+
+    activeView,
+    activeViewLabel,
+    onResetOrder,
 }: RoutePanelProps) {
+    // Показываем баннер, только когда точки реально показаны не в том
+    // порядке, в котором их ввёл пользователь — иначе баннер не нужен
+    const showOrderBanner = activeView !== "original" && activeViewLabel != null;
+
     return (
         <div className="absolute left-5 top-10 z-1000 w-520px rounded-lg bg-white/80 p-4 shadow-lg backdrop-blur-sm">
             <h2 className="mb-4 text-black font-semibold">
                 Маршрут
             </h2>
+
+            {showOrderBanner && (
+                <div className="mb-4 flex items-center justify-between gap-3 rounded border border-blue-300 bg-blue-50 px-3 py-2">
+                    <p className="text-sm text-blue-800">
+                        Точки пронумерованы в порядке варианта «{activeViewLabel}»
+                    </p>
+                    <button
+                        type="button"
+                        onClick={onResetOrder}
+                        className="flex shrink-0 items-center gap-1 rounded border border-blue-300 bg-white px-2 py-1 text-xs font-medium text-blue-800 hover:bg-blue-100"
+                        title="Показать в порядке ввода"
+                    >
+                        <RotateCcw size={14} />
+                        Как ввёл
+                    </button>
+                </div>
+            )}
 
             {points.map((point, index) => {
                 const pointSuggestions = suggestions[point.id] ?? [];
